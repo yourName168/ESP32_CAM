@@ -1,6 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, Response
 import os
 import cv2
+import logging
 import numpy as np
 import base64
 import json
@@ -8,10 +9,16 @@ from datetime import datetime
 import time
 from database import db, User, Attendance, init_db
 from face_recognition_model import FaceRecognitionSystem
+import requests
+from io import BytesIO
+import base64
+from PIL import Image
+from flask_cors import CORS
 
 app = Flask(__name__)
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///attendance.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+CORS(app) 
 
 # Khởi tạo cơ sở dữ liệu
 db.init_app(app)
@@ -24,7 +31,7 @@ os.makedirs("known_faces", exist_ok=True)
 os.makedirs("attendance_records", exist_ok=True)
 
 
-@app.before_first_request
+# @app.before_first_request
 def create_tables():
     init_db(app)
     # Tải các khuôn mặt đã biết từ cơ sở dữ liệu
@@ -33,6 +40,132 @@ def create_tables():
         if os.path.exists(user.face_image_path):
             face_system.add_known_face(user.id, user.face_image_path)
 
+            
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+ESP32_REQUEST_TIMEOUT = 10  # seconds
+
+
+@app.route('/api/proxy/esp32cam/capture', methods=['GET'])
+def proxy_esp32cam_capture():
+    """
+    Proxy endpoint for ESP32-CAM capture to handle CORS and timeouts
+    """
+    ip = request.args.get('ip')
+    if not ip:
+        return jsonify({"error": "Missing IP parameter"}), 400
+    
+    timestamp = request.args.get('t', '')
+    
+    # Log the request
+    logger.info(f"Proxying request to ESP32-CAM at {ip}")
+    
+    try:
+        # Make request to ESP32-CAM with increased timeout
+        url = f"http://{ip}/capture"
+        if timestamp:
+            url += f"?t={timestamp}"
+            
+        logger.info(f"Requesting: {url}")
+        
+        # Use session for better connection reuse
+        session = requests.Session()
+        
+        # Configure the request with proper headers to prevent caching
+        headers = {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+        }
+        
+        # Make the request with a generous timeout
+        resp = session.get(
+            url, 
+            headers=headers,
+            timeout=ESP32_REQUEST_TIMEOUT,
+            stream=True  # Use streaming to handle large responses
+        )
+        
+        # Check if request was successful
+        if not resp.ok:
+            logger.error(f"ESP32-CAM returned error: {resp.status_code}")
+            return jsonify({
+                "error": f"ESP32-CAM returned {resp.status_code}"
+            }), resp.status_code
+        
+        # Return the response with proper headers
+        return Response(
+            resp.content,
+            status=resp.status_code,
+            content_type=resp.headers.get('Content-Type', 'image/jpeg'),
+            headers={
+                'Access-Control-Allow-Origin': '*',  # Enable CORS
+                'Cache-Control': 'no-store'  # Prevent caching
+            }
+        )
+        
+    except requests.Timeout:
+        logger.error(f"Request to ESP32-CAM timed out after {ESP32_REQUEST_TIMEOUT}s")
+        return jsonify({"error": "Connection to ESP32-CAM timed out"}), 504
+        
+    except requests.ConnectionError:
+        logger.error(f"Failed to connect to ESP32-CAM at {ip}")
+        return jsonify({"error": "Failed to connect to ESP32-CAM"}), 502
+        
+    except Exception as e:
+        logger.error(f"Unexpected error proxying to ESP32-CAM: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+
+# @app.route('/api/proxy/esp32cam/<path:endpoint>', methods=['GET'])
+# def esp32_proxy(endpoint):
+#     """
+#     Proxy endpoint to forward requests to ESP32-CAM
+#     """
+#     camera_ip = request.args.get('ip')
+#     logging.debug(f"Received proxy request for endpoint: {endpoint}, IP: {camera_ip}")
+    
+#     if not camera_ip:
+#         logging.error("Camera IP not provided in request")
+#         return jsonify({"error": "Camera IP not provided"}), 400
+    
+#     timestamp = int(time.time() * 1000)
+#     url = f"http://{camera_ip}/{endpoint}?t={timestamp}"
+#     print(f"Forwarding request to: {url}")
+    
+#     try:
+#         # Create a session with specific timeouts
+#         session = requests.Session()
+#         # Set longer timeout values: connect timeout 10 sec, read timeout 15 sec
+#         response = session.get(url, timeout=(10, 15), stream=True)
+        
+#         logging.info(f"Received response from ESP32-CAM: {response.status_code}")
+        
+#         # Stream the response back to client to avoid memory issues with large images
+#         def generate():
+#             for chunk in response.iter_content(chunk_size=8192):
+#                 yield chunk
+#         headers = dict(response.headers)
+#         # Add CORS headers
+#         headers['Access-Control-Allow-Origin'] = '*'
+#         headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+#         headers['Access-Control-Allow-Headers'] = 'Content-Type'
+
+#         # Return a streaming response
+#         return Response(
+#             generate(),
+#             status=response.status_code,
+#             headers=headers,
+#             content_type=response.headers.get('content-type', 'image/jpeg')
+#         )
+#     except requests.exceptions.ConnectTimeout:
+#         logging.error(f"Connection timeout to ESP32-CAM: {camera_ip}")
+#         return jsonify({"error": "Unable to connect to ESP32-CAM - connection timeout"}), 504
+#     except requests.exceptions.ReadTimeout:
+#         logging.error(f"Read timeout from ESP32-CAM: {camera_ip}")
+#         return jsonify({"error": "Timeout while reading response from ESP32-CAM"}), 504
+#     except requests.RequestException as e:
+#         logging.error(f"Request to ESP32-CAM failed: {e}")
+#         return jsonify({"error": str(e)}), 500
 
 # Route cho trang chủ
 @app.route("/")
@@ -332,6 +465,7 @@ def api_recognize_faces():
     recognized_faces = face_system.recognize_faces(frame)
     attendance_created = False
 
+    logger.info(f"Recognized faces: {recognized_faces}")
     # Tạo bản ghi điểm danh cho những khuôn mặt đã nhận diện được
     today = datetime.now().date()
 
@@ -359,7 +493,5 @@ def api_recognize_faces():
     return jsonify(
         {"success": True, "faces": recognized_faces, "attendance": attendance_created}
     )
-
-
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

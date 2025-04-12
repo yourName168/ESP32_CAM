@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="vi">
   <head>
@@ -59,42 +60,66 @@
             </div>
             <div class="card-body">
               <div class="alert alert-info">
-                <strong>Hướng dẫn:</strong> Nhìn thẳng vào camera để hệ thống
+                <strong>Hướng dẫn:</strong> Nhìn thẳng vào camera ESP32-CAM để hệ thống
                 nhận diện khuôn mặt của bạn.
               </div>
 
+              <div class="mb-3">
+                <label for="cameraIp" class="form-label">Địa chỉ IP ESP32-CAM:</label>
+                <div class="input-group">
+                  <input 
+                    type="text" 
+                    class="form-control" 
+                    id="cameraIp" 
+                    placeholder="Ví dụ: 192.168.1.100" 
+                    value="192.168.1.100"
+                  />
+                  <button class="btn btn-outline-primary" type="button" id="connectCamera">Kết nối</button>
+                </div>
+                <div class="form-text">Nhập địa chỉ IP của module ESP32-CAM trong mạng của bạn.</div>
+              </div>
+              
               <div class="text-center mb-4">
                 <div class="mb-3">
                   <h4 id="dateTimeDisplay" class="text-primary"></h4>
                 </div>
-
-                <div class="position-relative mb-3">
-                  <video
-                    id="video"
-                    width="500"
-                    height="375"
-                    autoplay
-                    class="border rounded"
-                  ></video>
+              
+                <!-- Stream + Canvas block (stacked instead of overlaid) -->
+                <div class="mb-3">
+                  <img
+                    id="cameraStream"
+                    width="480"
+                    height="360"
+                    class="border rounded mb-2"
+                    alt="ESP32-CAM Stream"
+                    style="display: none;"
+                  />
                   <canvas
                     id="facePreview"
-                    width="500"
-                    height="375"
-                    class="d-none position-absolute top-0 start-50 translate-middle-x"
+                    width="480"
+                    height="360"
+                    class="d-none mb-2"
+                  ></canvas>
+                  <canvas
+                    id="canvas"
+                    width="480"
+                    height="360"
+                    class="d-none"
                   ></canvas>
                 </div>
-
+              
                 <div class="d-flex justify-content-center gap-2 mt-3">
                   <button
                     type="button"
                     id="startCamera"
                     class="btn btn-primary"
+                    disabled
                   >
                     Bắt đầu nhận diện
                   </button>
                 </div>
               </div>
-
+              
               <div class="text-center mt-4">
                 <p><strong>Điểm danh hôm nay</strong></p>
                 <div class="table-responsive">
@@ -131,3 +156,4 @@
     <script src="{{ url_for('static', filename='js/attendance.js') }}"></script>
   </body>
 </html>
+```
