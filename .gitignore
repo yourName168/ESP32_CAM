@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Flask
+instance/
+.webassets-cache
+
+# Virtual Environment
+venv/
+ENV/
+env/
+
+# Database
+*.db
+*.db-journal
+
+# Face recognition models and data
+*.pkl
+face_recognizer_model.xml
+!face_recognition_model.py
+
+# Known faces directory - only ignore content, not the directory itself
+known_faces/*
+!known_faces/.gitkeep
+
+# Attendance records - only ignore content, not the directory itself
+attendance_records/*
+!attendance_records/.gitkeep
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
+.project
+.pydevproject
+
+# OS specific files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ESP32-specific files
+.pio
+.pioenvs
+.piolibdeps
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Log files
+*.log
